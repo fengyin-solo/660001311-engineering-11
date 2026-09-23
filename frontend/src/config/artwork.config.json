@@ -1,0 +1,5 @@
+{
+  "canvas": { "width": 800, "height": 1000 },
+  "background": { "color": "#030712" },
+  "export": { "fileNamePrefix": "art", "pngScale": 2 }
+}
