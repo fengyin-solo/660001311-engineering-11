@@ -1,8 +1,12 @@
 import { create } from 'zustand'
 import type { DesignParams, PatternType } from '../types'
 import { THEMES } from '../themes/palettes'
+import { ARTWORK_CONFIG } from '../config/artworkConfig'
+import type { ArtworkParams } from '../render/renderArtwork'
+import { exportSvg as doExportSvg, exportPng as doExportPng } from '../export/exportArtwork'
 
 interface DesignStore extends DesignParams {
+  /** 最近一次预览渲染出的 SVG，仅供预览显示，导出不读取它 */
   svgContent: string
   setParam: <K extends keyof DesignParams>(key: K, value: DesignParams[K]) => void
   setPattern: (p: PatternType) => void
@@ -13,6 +17,12 @@ interface DesignStore extends DesignParams {
   exportPng: () => void
 }
 
+/** 从 store 状态取出渲染/导出所需的作品参数（store 与渲染模块的边界） */
+export function pickArtworkParams(s: DesignParams): ArtworkParams {
+  const { pattern, seed, iterations, scale, rotation, strokeWidth, opacity, palette } = s
+  return { pattern, seed, iterations, scale, rotation, strokeWidth, opacity, palette }
+}
+
 export const useDesignStore = create<DesignStore>((set, get) => ({
   pattern: 'spiral',
   seed: 42,
@@ -21,12 +31,9 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
   rotation: 0,
   strokeWidth: 1.5,
   opacity: 0.8,
-  bgColor: '#030712',
   palette: THEMES[0].colors,
-  width: 800,
-  height: 1000,
   svgContent: '',
-  setParam: (key, value) => set({ [key]: value } as any),
+  setParam: (key, value) => set({ [key]: value } as Partial<DesignStore>),
   setPattern: (p) => set({ pattern: p }),
   setTheme: (id) => {
     const theme = THEMES.find(t => t.id === id)
@@ -35,30 +42,10 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
   randomSeed: () => set({ seed: Math.floor(Math.random() * 99999) }),
   setSvgContent: (s) => set({ svgContent: s }),
   exportSvg: () => {
-    const { svgContent } = get()
-    const blob = new Blob([svgContent], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `art-${get().seed}.svg`; a.click()
-    URL.revokeObjectURL(url)
+    // 导出时即时渲染，不复用 svgContent 缓存
+    doExportSvg(pickArtworkParams(get()), ARTWORK_CONFIG)
   },
   exportPng: () => {
-    const { svgContent, width, height } = get()
-    const canvas = document.createElement('canvas')
-    canvas.width = width; canvas.height = height
-    const ctx = canvas.getContext('2d')!
-    const img = new Image()
-    const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(svgBlob)
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0)
-      URL.revokeObjectURL(url)
-      canvas.toBlob(blob => {
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob!)
-        a.download = `art-${get().seed}.png`; a.click()
-      })
-    }
-    img.src = url
+    doExportPng(pickArtworkParams(get()), ARTWORK_CONFIG)
   },
 }))
